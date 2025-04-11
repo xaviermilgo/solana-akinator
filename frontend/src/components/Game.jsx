@@ -126,21 +126,6 @@ function Game() {
         }
     };
 
-    const handleStartGame = () => {
-        if (socket && isConnected) {
-            // Reset any previous state
-            setTwitterHandle('');
-            // Set initial idle state to ensure animation plays
-            setJinnState('idle');
-            setMessage("I am the Crypto Jinn! Share your Twitter handle, and I shall reveal your crypto identity!");
-
-            socket.send(JSON.stringify({
-                type: 'START_GAME',
-                payload: {},
-            }));
-        }
-    };
-
     const handleSubmitTwitter = () => {
         if (socket && isConnected && twitterHandle) {
             // Show thinking animation immediately for better UX
@@ -176,7 +161,6 @@ function Game() {
                 <GameControls
                     twitterHandle={twitterHandle}
                     setTwitterHandle={setTwitterHandle}
-                    onStart={handleStartGame}
                     onSubmit={handleSubmitTwitter}
                     isConnected={isConnected}
                     isProcessing={isProcessing}

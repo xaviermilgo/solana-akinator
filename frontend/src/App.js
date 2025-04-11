@@ -11,7 +11,7 @@ function App() {
                 <Game />
             </main>
             <footer className="app-footer">
-                <p>&copy; 2025 Magical Wallet Guesser | Powered by the Crypto Jinn</p>
+                <p>&copy; 2025 Magical Wallet Guesser | Made with ❤️ by <a href="https://twitter.com/xaviermilgo" target="_blank">@xaviermilgo</a></p>
             </footer>
         </div>
     );
