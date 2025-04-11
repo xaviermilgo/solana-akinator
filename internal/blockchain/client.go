@@ -7,55 +7,28 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"wallet-guesser/internal/domain"
 )
 
 // Client handles interactions with the Solana blockchain
 type Client struct {
 	rpcEndpoint string
 	httpClient  *http.Client
+	avoidList   domain.AvoidListService
 }
 
 // NewClient creates a new blockchain client
-func NewClient(rpcEndpoint string) *Client {
+func NewClient(rpcEndpoint string, avoidList domain.AvoidListService) *Client {
 	return &Client{
 		rpcEndpoint: rpcEndpoint,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		avoidList:   avoidList,
 	}
 }
 
-// RpcRequest represents a JSON-RPC request
-type RpcRequest struct {
-	Jsonrpc string        `json:"jsonrpc"`
-	ID      int           `json:"id"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-}
-
-// RpcResponse represents a JSON-RPC response
-type RpcResponse struct {
-	Jsonrpc string          `json:"jsonrpc"`
-	ID      int             `json:"id"`
-	Result  json.RawMessage `json:"result"`
-	Error   *RpcError       `json:"error,omitempty"`
-}
-
-// RpcError represents a JSON-RPC error
-type RpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-// AccountInfo represents the data of a Solana account
-type AccountInfo struct {
-	Lamports   uint64   `json:"lamports"`
-	Owner      string   `json:"owner"`
-	Data       []string `json:"data"`
-	Executable bool     `json:"executable"`
-	RentEpoch  uint64   `json:"rentEpoch"`
-}
-
 // GetProgramAccounts fetches all accounts owned by a program
-func (c *Client) GetProgramAccounts(programID string, filters []map[string]interface{}, progressCallback func(message string)) ([]map[string]interface{}, error) {
+func (c *Client) GetProgramAccounts(programID string, filters []map[string]interface{}, progressCallback domain.ProgressCallback) ([]map[string]interface{}, error) {
 	if progressCallback != nil {
 		progressCallback(fmt.Sprintf("Fetching accounts for program %s...", programID))
 	}
@@ -94,26 +67,28 @@ func (c *Client) GetProgramAccounts(programID string, filters []map[string]inter
 }
 
 // GetWalletsForToken returns all wallet addresses that have interacted with a specific token
-func (c *Client) GetWalletsForToken(mintAddress string, progressCallback func(message string)) ([]string, error) {
+func (c *Client) GetWalletsForToken(mintAddress string, progressCallback domain.ProgressCallback) ([]string, error) {
+	// Check if the token should be avoided
+	if c.avoidList != nil {
+		if shouldAvoid, reason := c.avoidList.ShouldAvoid(mintAddress); shouldAvoid {
+			if progressCallback != nil {
+				progressCallback(fmt.Sprintf("Skipping token %s: %s", mintAddress, reason))
+			}
+			return nil, nil
+		}
+	}
+
 	if progressCallback != nil {
 		progressCallback(fmt.Sprintf("Searching for wallets that interacted with token %s...", mintAddress))
 	}
 
-	// First, we need the token program ID (typically TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA for SPL tokens)
-	tokenProgramID := "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-
 	// Create a filter to only get accounts for this mint
 	filters := []map[string]interface{}{
-		{
-			"memcmp": map[string]interface{}{
-				"offset": 0,
-				"bytes":  mintAddress,
-			},
-		},
+		TokenBalanceFilter(mintAddress),
 	}
 
 	// Get all token accounts for this mint
-	accounts, err := c.GetProgramAccounts(tokenProgramID, filters, progressCallback)
+	accounts, err := c.GetProgramAccounts(TokenProgramID, filters, progressCallback)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get program accounts: %w", err)
 	}
@@ -123,12 +98,20 @@ func (c *Client) GetWalletsForToken(mintAddress string, progressCallback func(me
 
 	for _, account := range accounts {
 		// Extract owner address from account data
-		// Note: The exact structure might need adjustment based on the actual RPC response
 		if accountData, ok := account["account"].(map[string]interface{}); ok {
 			if data, ok := accountData["data"].(map[string]interface{}); ok {
 				if parsed, ok := data["parsed"].(map[string]interface{}); ok {
 					if info, ok := parsed["info"].(map[string]interface{}); ok {
 						if owner, ok := info["owner"].(string); ok {
+							// Check if the wallet should be avoided
+							if c.avoidList != nil {
+								if shouldAvoid, reason := c.avoidList.ShouldAvoid(owner); shouldAvoid {
+									if progressCallback != nil {
+										progressCallback(fmt.Sprintf("Skipping wallet %s: %s", owner, reason))
+									}
+									continue
+								}
+							}
 							wallets[owner] = struct{}{}
 						}
 					}
