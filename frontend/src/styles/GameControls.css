@@ -1,0 +1,101 @@
+/* src/styles/GameControls.css */
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin-top: auto;
+  padding: 1rem;
+}
+
+.connection-status {
+  margin-bottom: 1rem;
+}
+
+.connected {
+  color: #4CAF50;
+}
+
+.disconnected {
+  color: #f44336;
+}
+
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 1rem;
+  border-radius: 10px;
+  gap: 1rem;
+}
+
+.start-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.start-button:hover {
+  background-color: #45a049;
+}
+
+.start-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.twitter-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.twitter-input label {
+  color: white;
+  font-size: 1.2rem;
+  margin-right: 0.5rem;
+}
+
+.twitter-input input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #ddd;
+  border-radius: 5px 0 0 5px;
+  font-size: 1rem;
+}
+
+.twitter-input input:focus {
+  outline: none;
+  border-color: #4CAF50;
+}
+
+.twitter-input input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.twitter-input button {
+  padding: 0.75rem 1.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 0 5px 5px 0;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.twitter-input button:hover {
+  background-color: #0b7dda;
+}
+
+.twitter-input button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
