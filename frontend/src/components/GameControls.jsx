@@ -1,4 +1,3 @@
-// src/components/GameControls.css.jsx
 import React from 'react';
 
 function GameControls({
@@ -6,7 +5,8 @@ function GameControls({
                           setTwitterHandle,
                           onStart,
                           onSubmit,
-                          isConnected
+                          isConnected,
+                          isProcessing = false
                       }) {
     const handleTwitterChange = (e) => {
         // Remove @ if user typed it
@@ -17,18 +17,18 @@ function GameControls({
     return (
         <div className="game-controls">
             <div className="connection-status">
-        <span className={isConnected ? 'connected' : 'disconnected'}>
-          {isConnected ? 'Connected' : 'Connecting...'}
-        </span>
+                <span className={isConnected ? 'connected' : 'disconnected'}>
+                    {isConnected ? '● Connected to the Mystical Realm' : '○ Establishing Connection...'}
+                </span>
             </div>
 
             <div className="control-panel">
                 <button
                     className="start-button"
                     onClick={onStart}
-                    disabled={!isConnected}
+                    disabled={!isConnected || isProcessing}
                 >
-                    Start Game
+                    {isProcessing ? 'Divination in Progress...' : 'Begin Mystical Divination'}
                 </button>
 
                 <div className="twitter-input">
@@ -38,14 +38,14 @@ function GameControls({
                         type="text"
                         value={twitterHandle}
                         onChange={handleTwitterChange}
-                        placeholder="Twitter handle"
-                        disabled={!isConnected}
+                        placeholder="Enter your Twitter handle"
+                        disabled={!isConnected || isProcessing}
                     />
                     <button
                         onClick={onSubmit}
-                        disabled={!isConnected || !twitterHandle}
+                        disabled={!isConnected || !twitterHandle || isProcessing}
                     >
-                        Submit
+                        {isProcessing ? 'Divining...' : 'Consult the Jinn'}
                     </button>
                 </div>
             </div>
