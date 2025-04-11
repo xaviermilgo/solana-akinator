@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Jinn from './Jinn';
 import GameControls from './GameControls';
+import WalletResults from './WalletResults';
 import { connectWebSocket } from '../services/websocket';
 import backgroundImage from "../assets/background.png";
 
@@ -11,7 +12,17 @@ function Game() {
     const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [progressLogs, setProgressLogs] = useState([]);
+    const [walletResult, setWalletResult] = useState(null);
     const orbsRef = useRef(null);
+    const logsEndRef = useRef(null);
+
+    // Auto-scroll logs to bottom
+    useEffect(() => {
+        if (logsEndRef.current) {
+            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [progressLogs]);
 
     // Create mystical orbs dynamically
     useEffect(() => {
@@ -121,6 +132,14 @@ function Game() {
                 // Update game state from backend
                 setJinnState(data.payload.jinnState);
                 break;
+            case 'PROGRESS_UPDATE':
+                // Add new progress log
+                setProgressLogs(logs => [...logs, data.payload.message]);
+                break;
+            case 'WALLET_RESULT':
+                // Set wallet result
+                setWalletResult(data.payload);
+                break;
             default:
                 console.log('Unknown message type:', data.type);
         }
@@ -128,6 +147,10 @@ function Game() {
 
     const handleSubmitTwitter = () => {
         if (socket && isConnected && twitterHandle) {
+            // Reset state for new search
+            setWalletResult(null);
+            setProgressLogs([]);
+
             // Show thinking animation immediately for better UX
             setJinnState('thinking');
             setMessage("Hmm... I'm consulting the mystical blockchain ledgers...");
@@ -140,6 +163,14 @@ function Game() {
                 },
             }));
         }
+    };
+
+    const resetGame = () => {
+        setWalletResult(null);
+        setProgressLogs([]);
+        setJinnState('idle');
+        setIsProcessing(false);
+        setTwitterHandle('');
     };
 
     return (
@@ -158,12 +189,34 @@ function Game() {
                     {message}
                 </div>
 
+                {walletResult && (
+                    <WalletResults
+                        result={walletResult}
+                        onBack={resetGame}
+                    />
+                )}
+
+                {isProcessing && progressLogs.length > 0 && (
+                    <div className="progress-logs">
+                        <div className="logs-header">The Jinn's Mystical Process:</div>
+                        <div className="logs-content">
+                            {progressLogs.map((log, index) => (
+                                <div key={index} className="log-entry">
+                                    <span className="log-dot">✧</span> {log}
+                                </div>
+                            ))}
+                            <div ref={logsEndRef} />
+                        </div>
+                    </div>
+                )}
+
                 <GameControls
                     twitterHandle={twitterHandle}
                     setTwitterHandle={setTwitterHandle}
                     onSubmit={handleSubmitTwitter}
                     isConnected={isConnected}
                     isProcessing={isProcessing}
+                    showControls={!walletResult}
                 />
             </div>
         </div>

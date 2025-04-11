@@ -1,0 +1,220 @@
+/* src/styles/WalletResults.css */
+.wallet-results {
+    background-color: rgba(13, 10, 38, 0.85);
+    border: 1px solid rgba(98, 86, 136, 0.4);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    width: 100%;
+    max-width: 580px;
+    color: #e2e8ff;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    animation: fade-in 0.5s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.results-header {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.results-header h3 {
+    font-size: 1.4rem;
+    margin-bottom: 0.75rem;
+    color: #8fcbff;
+    text-shadow: 0 0 8px rgba(94, 191, 255, 0.4);
+}
+
+.confidence-meter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.confidence-label {
+    font-size: 0.9rem;
+    color: #b3c5ff;
+    margin-right: 0.5rem;
+}
+
+.confidence-bar {
+    background-color: rgba(255, 255, 255, 0.1);
+    height: 12px;
+    width: 200px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.confidence-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 1.5s ease-out;
+}
+
+.high-confidence .confidence-fill {
+    background: linear-gradient(90deg, #42f5b3, #42c3f7);
+}
+
+.medium-confidence .confidence-fill {
+    background: linear-gradient(90deg, #f7d042, #f79642);
+}
+
+.low-confidence .confidence-fill {
+    background: linear-gradient(90deg, #f79642, #f74242);
+}
+
+.confidence-value {
+    font-size: 0.9rem;
+    font-weight: bold;
+    min-width: 40px;
+    text-align: right;
+}
+
+.high-confidence .confidence-value {
+    color: #42f5b3;
+}
+
+.medium-confidence .confidence-value {
+    color: #f7d042;
+}
+
+.low-confidence .confidence-value {
+    color: #f79642;
+}
+
+.wallet-list {
+    margin: 1rem 0;
+}
+
+.wallet-list h4 {
+    color: #b3c5ff;
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.wallet-item {
+    background-color: rgba(20, 16, 48, 0.8);
+    border: 1px solid rgba(60, 51, 95, 0.5);
+    border-radius: 6px;
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+    transition: all 0.3s;
+}
+
+.wallet-item:hover {
+    background-color: rgba(25, 20, 60, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.wallet-address {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.address-text {
+    word-break: break-all;
+}
+
+.copy-button {
+    background-color: rgba(94, 114, 235, 0.2);
+    color: #8fcbff;
+    border: 1px solid rgba(94, 114, 235, 0.4);
+    border-radius: 4px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 70px;
+}
+
+.copy-button:hover {
+    background-color: rgba(94, 114, 235, 0.4);
+}
+
+.copy-button.copied {
+    background-color: rgba(66, 245, 179, 0.3);
+    color: #42f5b3;
+    border-color: rgba(66, 245, 179, 0.5);
+}
+
+.wallet-source {
+    font-size: 0.85rem;
+    color: #a8a8d8;
+    margin-top: 0.5rem;
+}
+
+.actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.back-button {
+    background: linear-gradient(135deg, #8a68e3, #6d56bd);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.back-button:hover {
+    background: linear-gradient(135deg, #9b78f5, #7e61d4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(138, 104, 227, 0.4);
+}
+
+.empty-results {
+    text-align: center;
+    padding: 2rem;
+}
+
+.result-message {
+    color: #b3c5ff;
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Media queries for responsive design */
+@media (max-width: 640px) {
+    .wallet-results {
+        padding: 1rem;
+    }
+
+    .results-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .confidence-bar {
+        width: 150px;
+    }
+
+    .wallet-item {
+        padding: 0.6rem;
+    }
+
+    .wallet-address {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .copy-button {
+        align-self: flex-end;
+    }
+}

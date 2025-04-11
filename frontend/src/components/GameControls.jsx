@@ -6,13 +6,16 @@ function GameControls({
                           setTwitterHandle,
                           onSubmit,
                           isConnected,
-                          isProcessing = false
+                          isProcessing = false,
+                          showControls = true
                       }) {
     const handleTwitterChange = (e) => {
         // Remove @ if user typed it
         const handle = e.target.value.replace('@', '');
         setTwitterHandle(handle);
     };
+
+    if (!showControls) return null;
 
     return (
         <div className="game-controls">
