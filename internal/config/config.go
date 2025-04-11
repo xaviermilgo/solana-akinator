@@ -10,8 +10,9 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Port       int
-	ApifyToken string
+	Port              int
+	ApifyToken        string
+	SolanaRpcEndpoint string
 }
 
 // Load loads configuration from environment variables
@@ -28,8 +29,14 @@ func Load() (*Config, error) {
 		}
 	}
 
+	solanaRpcEndpoint := os.Getenv("SOLANA_RPC_ENDPOINT")
+	if solanaRpcEndpoint == "" {
+		log.Fatalf("SOLANA_RPC_ENDPOINT environment variable not set")
+	}
+
 	return &Config{
-		Port:       port,
-		ApifyToken: os.Getenv("APIFY_TOKEN"),
+		Port:              port,
+		ApifyToken:        os.Getenv("APIFY_TOKEN"),
+		SolanaRpcEndpoint: solanaRpcEndpoint,
 	}, nil
 }

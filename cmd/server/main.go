@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"wallet-guesser/internal/api"
+	"wallet-guesser/internal/blockchain"
 	"wallet-guesser/internal/config"
 	"wallet-guesser/internal/game"
 	"wallet-guesser/internal/twitter"
@@ -24,8 +25,11 @@ func main() {
 		twitter.WithApifyToken(cfg.ApifyToken),
 	)
 
+	// Initialize Blockchain client
+	blockchainClient := blockchain.NewClient(cfg.SolanaRpcEndpoint)
+
 	// Initialize the wallet guesser
-	walletGuesser := game.NewWalletGuesser(twitterClient)
+	walletGuesser := game.NewWalletGuesser(twitterClient, blockchainClient)
 
 	// Initialize API handlers
 	apiHandler := api.NewHandler(walletGuesser)

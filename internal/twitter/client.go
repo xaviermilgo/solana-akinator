@@ -15,11 +15,11 @@ import (
 
 // TwitterUser represents a Twitter user with relevant information
 type TwitterUser struct {
-	Username          string   `json:"username"`
-	DisplayName       string   `json:"displayName,omitempty"`
-	Bio               string   `json:"bio,omitempty"`
-	Website           string   `json:"website,omitempty"`
-	PossibleAddresses []string `json:"possibleAddresses,omitempty"`
+	Username              string   `json:"username"`
+	DisplayName           string   `json:"displayName,omitempty"`
+	Bio                   string   `json:"bio,omitempty"`
+	Urls                  []string `json:"urls,omitempty"`
+	PossibleMintAddresses []string `json:"possibleAddresses,omitempty"`
 }
 
 // Client handles interactions with the Twitter API via Apify
@@ -69,14 +69,25 @@ type ApifyInput struct {
 	GetFollowing  bool     `json:"getFollowing"`
 }
 
+type URLSet []struct {
+	ExpandedURL string `json:"expanded_url"`
+}
+
 // ApifyFollowerResponse represents the response from Apify
 type ApifyFollowerResponse struct {
-	Username    string `json:"username"`
-	FullName    string `json:"fullName"`
-	Bio         string `json:"bio"`
+	Username    string `json:"screen_name"`
+	FullName    string `json:"name"`
+	Bio         string `json:"description"`
 	Website     string `json:"website"`
 	ProfileLink string `json:"profileLink"`
-	// Add other fields as needed
+	Entities    struct {
+		URL struct {
+			URLSet `json:"urls"`
+		} `json:"url"`
+		Description struct {
+			URLSet `json:"urls"`
+		} `json:"description"`
+	} `json:"entities"`
 }
 
 // FetchFollowing fetches the accounts a user is following via Apify
@@ -131,54 +142,71 @@ func (c *Client) FetchFollowing(username string, limit int, progressCallback fun
 
 	if resp.StatusCode > 299 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Apify API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+		return nil, fmt.Errorf("apify API error (status %d): %s", resp.StatusCode, string(bodyBytes[:min(100, len(bodyBytes))]))
 	}
 
 	if progressCallback != nil {
 		progressCallback("Processing Apify response...")
 	}
 
+	responseContent, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse the response
 	var apifyResponses []ApifyFollowerResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apifyResponses); err != nil {
+	if err := json.Unmarshal(responseContent, &apifyResponses); err != nil {
 		return nil, err
 	}
 
 	// Transform to our internal model and extract wallet addresses
 	users := make([]TwitterUser, 0, len(apifyResponses))
-	for _, resp := range apifyResponses {
+	for _, accountResp := range apifyResponses {
 		user := TwitterUser{
-			Username:    resp.Username,
-			DisplayName: resp.FullName,
-			Bio:         resp.Bio,
-			Website:     resp.Website,
+			Username:    accountResp.Username,
+			DisplayName: accountResp.FullName,
+			Bio:         accountResp.Bio,
+			Urls:        make([]string, 0),
+		}
+
+		distinctUrls := make(map[string]struct{})
+		fullSet := append(accountResp.Entities.URL.URLSet, accountResp.Entities.Description.URLSet...)
+		for _, accUrl := range fullSet {
+			if _, ok := distinctUrls[accUrl.ExpandedURL]; !ok {
+				distinctUrls[accUrl.ExpandedURL] = struct{}{}
+				user.Urls = append(user.Urls, accUrl.ExpandedURL)
+			}
 		}
 
 		// Extract wallet addresses from bio
-		bioAddresses := ExtractSolanaAddresses(resp.Bio)
+		bioAddresses := ExtractSolanaAddresses(accountResp.Bio)
 		if len(bioAddresses) > 0 {
-			user.PossibleAddresses = append(user.PossibleAddresses, bioAddresses...)
+			user.PossibleMintAddresses = append(user.PossibleMintAddresses, bioAddresses...)
 			if progressCallback != nil {
-				progressCallback(fmt.Sprintf("Found %d potential wallet address(es) in @%s's bio", len(bioAddresses), resp.Username))
+				progressCallback(fmt.Sprintf("Found %d potential wallet address(es) in @%s's bio", len(bioAddresses), accountResp.Username))
 			}
 		}
 
 		// If a website is provided, fetch and scan it
-		if resp.Website != "" && isValidURL(resp.Website) {
+		for _, accUrl := range user.Urls {
+			if !isValidURL(accUrl) {
+				continue
+			}
 			if progressCallback != nil {
-				progressCallback(fmt.Sprintf("Checking @%s's website: %s", resp.Username, resp.Website))
+				progressCallback(fmt.Sprintf("Checking @%s's website: %s", accountResp.Username, accUrl))
 			}
 
-			websiteAddresses, err := FetchAndExtractAddressesFromWebsite(resp.Website)
+			websiteAddresses, err := FetchAndExtractAddressesFromWebsite(accUrl)
 			if err != nil {
 				// Just log the error but continue
 				if progressCallback != nil {
-					progressCallback(fmt.Sprintf("Error scanning website for @%s: %s", resp.Username, err.Error()))
+					progressCallback(fmt.Sprintf("Error scanning website for @%s: %s", accountResp.Username, err.Error()))
 				}
 			} else if len(websiteAddresses) > 0 {
-				user.PossibleAddresses = append(user.PossibleAddresses, websiteAddresses...)
+				user.PossibleMintAddresses = append(user.PossibleMintAddresses, websiteAddresses...)
 				if progressCallback != nil {
-					progressCallback(fmt.Sprintf("Found %d potential wallet address(es) on @%s's website", len(websiteAddresses), resp.Username))
+					progressCallback(fmt.Sprintf("Found %d potential wallet address(es) on @%s's website", len(websiteAddresses), accountResp.Username))
 				}
 			}
 		}
