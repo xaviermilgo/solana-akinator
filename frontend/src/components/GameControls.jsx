@@ -4,7 +4,6 @@ import React from 'react';
 function GameControls({
                           twitterHandle,
                           setTwitterHandle,
-                          onStart,
                           onSubmit,
                           isConnected,
                           isProcessing = false
@@ -24,13 +23,9 @@ function GameControls({
             </div>
 
             <div className="control-panel">
-                <button
-                    className="start-button"
-                    onClick={onStart}
-                    disabled={!isConnected || isProcessing}
-                >
-                    {isProcessing ? 'Divination in Progress...' : 'Begin Mystical Divination'}
-                </button>
+                <div className="jinn-description">
+                    <p>Enter your Twitter handle below and the Crypto Jinn will divine your wallet address using mystical blockchain powers!</p>
+                </div>
 
                 <div className="twitter-input-container">
                     <div className="twitter-input">
@@ -49,7 +44,7 @@ function GameControls({
                         onClick={onSubmit}
                         disabled={!isConnected || !twitterHandle || isProcessing}
                     >
-                        Consult the Jinn
+                        {isProcessing ? 'Divining...' : 'Consult the Jinn'}
                     </button>
                 </div>
             </div>
