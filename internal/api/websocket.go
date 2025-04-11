@@ -1,11 +1,13 @@
 package api
 
 import (
-	"log"
+	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 	"wallet-guesser/internal/game"
 )
 
@@ -15,15 +17,34 @@ type Message struct {
 	Payload interface{} `json:"payload"`
 }
 
+// UserInputPayload represents the payload for USER_INPUT messages
+type UserInputPayload struct {
+	Twitter string `json:"twitter"`
+}
+
+// ProgressMessage represents a progress update message
+type ProgressMessage struct {
+	Message string `json:"message"`
+}
+
+// WalletGuesserResult represents the result of a wallet guessing process
+type WalletGuesserResult struct {
+	TwitterHandle string   `json:"twitterHandle"`
+	Addresses     []string `json:"addresses"`
+	Sources       []string `json:"sources"`
+	Confidence    int      `json:"confidence"`
+}
+
 // Handler manages the API endpoints
 type Handler struct {
-	upgrader websocket.Upgrader
-	clients  map[*websocket.Conn]bool
-	mutex    sync.Mutex
+	upgrader      websocket.Upgrader
+	clients       map[*websocket.Conn]bool
+	mutex         sync.Mutex
+	walletGuesser *game.WalletGuesser
 }
 
 // NewHandler creates a new API handler
-func NewHandler() *Handler {
+func NewHandler(walletGuesser *game.WalletGuesser) *Handler {
 	return &Handler{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -31,7 +52,8 @@ func NewHandler() *Handler {
 				return true
 			},
 		},
-		clients: make(map[*websocket.Conn]bool),
+		clients:       make(map[*websocket.Conn]bool),
+		walletGuesser: walletGuesser,
 	}
 }
 
@@ -78,20 +100,85 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Process the message based on its type
 		switch msg.Type {
 		case "START_GAME":
-			// We'll implement game start logic later
-			if err := sendJinnState(conn, "idle"); err != nil {
-				log.Printf("Error sending jinn state: %v", err)
-			}
+			// Set the game state to idle
+			sendJinnState(conn, "idle", "I am the Crypto Jinn! I can divine your wallet address from your Twitter handle!")
 		case "USER_INPUT":
-			// We'll implement input handling later
-			// For now, just acknowledge receipt
-			if err := sendJinnState(conn, "thinking"); err != nil {
-				log.Printf("Error sending jinn state: %v", err)
-			}
+			// Handle user input (Twitter handle)
+			h.handleUserInput(conn, msg.Payload)
 		default:
 			log.Printf("Unknown message type: %s", msg.Type)
 		}
 	}
+}
+
+// handleUserInput processes a user's input (Twitter handle)
+func (h *Handler) handleUserInput(conn *websocket.Conn, payload interface{}) {
+	// Parse the payload
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshaling payload: %v", err)
+		sendJinnState(conn, "glitched", "The Jinn has encountered an error interpreting your request.")
+		return
+	}
+
+	var inputPayload UserInputPayload
+	if err := json.Unmarshal(payloadBytes, &inputPayload); err != nil {
+		log.Printf("Error unmarshaling payload: %v", err)
+		sendJinnState(conn, "glitched", "The Jinn has encountered an error interpreting your request.")
+		return
+	}
+
+	twitterHandle := inputPayload.Twitter
+	if twitterHandle == "" {
+		sendJinnState(conn, "asking", "The Jinn needs a Twitter handle to divine the wallet address.")
+		return
+	}
+
+	// Start the wallet guessing process in a goroutine
+	go func() {
+		// First, update the UI to show we're thinking
+		sendJinnState(conn, "thinking", "Hmm... I'm consulting the mystical blockchain ledgers...")
+
+		// Define a progress callback to update the user
+		progressCallback := func(message string) {
+			log.Infof("[%s] update : %s", twitterHandle, message)
+			// Send progress update to the client
+			sendProgressUpdate(conn, message)
+			// Small delay to make the updates more readable
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		// Call the wallet guesser
+		result, err := h.walletGuesser.GuessWallet(twitterHandle, progressCallback)
+		if err != nil {
+			log.Printf("Error guessing wallet: %v", err)
+			sendJinnState(conn, "wrong", "The crypto spirits are not cooperating today. Please try again later.")
+			return
+		}
+
+		// Process the result
+		if len(result.Addresses) > 0 {
+			// We found potential wallet addresses
+			confidence := result.Confidence
+
+			// Send the result back to the client
+			sendWalletGuesserResult(conn, result)
+
+			// Update the Jinn state based on confidence
+			if confidence >= 70 {
+				sendJinnState(conn, "confident", "Aha! I sense strong wallet energy from this Twitter handle!")
+				time.Sleep(1500 * time.Millisecond)
+				sendJinnState(conn, "correct", "Behold! I have divined your wallet correctly!")
+			} else if confidence >= 40 {
+				sendJinnState(conn, "asking", "I sense some wallet energy, but I'm not entirely sure...")
+			} else {
+				sendJinnState(conn, "wrong", "The blockchain spirits have whispered some addresses, but I'm uncertain...")
+			}
+		} else {
+			// No wallet addresses found
+			sendJinnState(conn, "wrong", "I could not divine any wallet addresses for this Twitter handle.")
+		}
+	}()
 }
 
 // sendGameState sends the current game state to the client
@@ -103,11 +190,44 @@ func sendGameState(conn *websocket.Conn, state *game.State) error {
 }
 
 // sendJinnState sends a jinn state update to the client
-func sendJinnState(conn *websocket.Conn, state string) error {
-	return conn.WriteJSON(Message{
+func sendJinnState(conn *websocket.Conn, state game.JinnState, message string) {
+	err := conn.WriteJSON(Message{
 		Type: "JINN_STATE",
 		Payload: map[string]string{
-			"state": state,
+			"state":   string(state),
+			"message": message,
 		},
 	})
+	if err != nil {
+		log.WithError(err).Error("Error sending jinn state")
+	}
+}
+
+// sendProgressUpdate sends a progress update to the client
+func sendProgressUpdate(conn *websocket.Conn, message string) {
+	err := conn.WriteJSON(Message{
+		Type: "PROGRESS_UPDATE",
+		Payload: ProgressMessage{
+			Message: message,
+		},
+	})
+	if err != nil {
+		log.WithError(err).Error("Error sending progress update")
+	}
+}
+
+// sendWalletGuesserResult sends the wallet guesser result to the client
+func sendWalletGuesserResult(conn *websocket.Conn, result *game.WalletGuessResult) {
+	err := conn.WriteJSON(Message{
+		Type: "WALLET_RESULT",
+		Payload: WalletGuesserResult{
+			TwitterHandle: result.TwitterHandle,
+			Addresses:     result.Addresses,
+			Sources:       result.Sources,
+			Confidence:    result.Confidence,
+		},
+	})
+	if err != nil {
+		log.WithError(err).Error("Error sending wallet guess result")
+	}
 }

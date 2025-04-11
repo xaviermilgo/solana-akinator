@@ -8,6 +8,8 @@ import (
 
 	"wallet-guesser/internal/api"
 	"wallet-guesser/internal/config"
+	"wallet-guesser/internal/game"
+	"wallet-guesser/internal/twitter"
 )
 
 func main() {
@@ -17,8 +19,16 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Initialize Twitter client
+	twitterClient := twitter.NewClient(
+		twitter.WithApifyToken(cfg.ApifyToken),
+	)
+
+	// Initialize the wallet guesser
+	walletGuesser := game.NewWalletGuesser(twitterClient)
+
 	// Initialize API handlers
-	apiHandler := api.NewHandler()
+	apiHandler := api.NewHandler(walletGuesser)
 
 	// Set up WebSocket endpoint
 	http.HandleFunc("/ws", apiHandler.HandleWebSocket)
@@ -40,7 +50,7 @@ func main() {
 
 	// Start the server
 	serverAddr := fmt.Sprintf(":%d", cfg.Port)
-	log.Printf("Starting server on %s", serverAddr)
+	log.Printf("Starting Wallet Guesser server on %s", serverAddr)
 	if err := http.ListenAndServe(serverAddr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
