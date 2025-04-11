@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Jinn from './Jinn';
 import GameControls from './GameControls';
 import { connectWebSocket } from '../services/websocket';
-import backgroundImage from "../assets/background.png"
+import backgroundImage from "../assets/background.png";
 
 function Game() {
     const [jinnState, setJinnState] = useState('idle');
@@ -11,6 +11,52 @@ function Game() {
     const [socket, setSocket] = useState(null);
     const [isConnected, setIsConnected] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const orbsRef = useRef(null);
+
+    // Create mystical orbs dynamically
+    useEffect(() => {
+        if (orbsRef.current) {
+            // Create dynamic orbs
+            const orb1 = document.createElement('div');
+            orb1.className = 'orb1';
+            const orb2 = document.createElement('div');
+            orb2.className = 'orb2';
+
+            orbsRef.current.appendChild(orb1);
+            orbsRef.current.appendChild(orb2);
+
+            // Cleanup
+            return () => {
+                if (orbsRef.current) {
+                    orbsRef.current.removeChild(orb1);
+                    orbsRef.current.removeChild(orb2);
+                }
+            };
+        }
+    }, []);
+
+    // Add special effects when Jinn changes state
+    useEffect(() => {
+        const addTemporaryEffect = () => {
+            if (!orbsRef.current) return;
+
+            // Create a burst effect
+            const burstEffect = document.createElement('div');
+            burstEffect.className = `state-transition-effect ${jinnState}-transition`;
+            orbsRef.current.appendChild(burstEffect);
+
+            // Remove after animation completes
+            setTimeout(() => {
+                if (orbsRef.current && orbsRef.current.contains(burstEffect)) {
+                    orbsRef.current.removeChild(burstEffect);
+                }
+            }, 1000);
+        };
+
+        if (jinnState !== 'idle') {
+            addTemporaryEffect();
+        }
+    }, [jinnState]);
 
     useEffect(() => {
         // Connect to WebSocket when component mounts
@@ -111,20 +157,15 @@ function Game() {
         }
     };
 
-    // Add mystical effects with CSS
-    const backgroundStyle = {
-        background: `radial-gradient(circle at center, rgba(91, 33, 182, 0.1) 0%, rgba(10, 7, 33, 0) 70%)`,
-    };
-
     return (
         <div className="game-container">
             <div className="game-background">
                 <img src={backgroundImage} alt="Mystical gateway" />
             </div>
 
-            <div className="game-content" style={backgroundStyle}>
-                {/* Add subtle particle effects or mystical elements */}
-                <div className="mystical-orbs"></div>
+            <div className="game-content">
+                {/* Add mystical orbs with ref */}
+                <div className="mystical-orbs" ref={orbsRef}></div>
 
                 <Jinn state={jinnState} />
 

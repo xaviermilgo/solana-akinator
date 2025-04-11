@@ -1,3 +1,4 @@
+// src/components/GameControls.jsx
 import React from 'react';
 
 function GameControls({
@@ -18,7 +19,7 @@ function GameControls({
         <div className="game-controls">
             <div className="connection-status">
                 <span className={isConnected ? 'connected' : 'disconnected'}>
-                    {isConnected ? '● Connected to the Mystical Realm' : '○ Establishing Connection...'}
+                    {isConnected ? '● Connected to the Mystical Realm' : '○ Connecting...'}
                 </span>
             </div>
 
@@ -31,21 +32,24 @@ function GameControls({
                     {isProcessing ? 'Divination in Progress...' : 'Begin Mystical Divination'}
                 </button>
 
-                <div className="twitter-input">
-                    <label htmlFor="twitter-handle">@</label>
-                    <input
-                        id="twitter-handle"
-                        type="text"
-                        value={twitterHandle}
-                        onChange={handleTwitterChange}
-                        placeholder="Enter your Twitter handle"
-                        disabled={!isConnected || isProcessing}
-                    />
+                <div className="twitter-input-container">
+                    <div className="twitter-input">
+                        <label htmlFor="twitter-handle">@</label>
+                        <input
+                            id="twitter-handle"
+                            type="text"
+                            value={twitterHandle}
+                            onChange={handleTwitterChange}
+                            placeholder="Enter Twitter handle"
+                            disabled={!isConnected || isProcessing}
+                        />
+                    </div>
                     <button
+                        className="submit-button"
                         onClick={onSubmit}
                         disabled={!isConnected || !twitterHandle || isProcessing}
                     >
-                        {isProcessing ? 'Divining...' : 'Consult the Jinn'}
+                        Consult the Jinn
                     </button>
                 </div>
             </div>
