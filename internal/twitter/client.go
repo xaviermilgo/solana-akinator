@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"wallet-guesser/internal/domain"
@@ -16,15 +17,18 @@ import (
 
 // Client handles interactions with the Twitter API via Apify
 type Client struct {
-	apifyToken string
-	httpClient *http.Client
-	timeout    int
+	apifyToken   string
+	httpClient   *http.Client
+	timeout      int
+	websiteCache map[string]string // URL -> content
+	cacheMutex   sync.RWMutex
 }
 
 // NewClient creates a new Twitter API client
 func NewClient(options ...ClientOption) domain.TwitterService {
 	client := &Client{
-		timeout: 30, // Default timeout in seconds
+		timeout:      30, // Default timeout in seconds
+		websiteCache: make(map[string]string),
 	}
 
 	// Apply options

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"wallet-guesser/internal/domain"
@@ -16,6 +17,8 @@ type Client struct {
 	rpcEndpoint string
 	httpClient  *http.Client
 	avoidList   domain.AvoidListService
+	walletCache map[string][]string // token -> wallets
+	cacheMutex  sync.RWMutex
 }
 
 // NewClient creates a new blockchain client
@@ -24,14 +27,12 @@ func NewClient(rpcEndpoint string, avoidList domain.AvoidListService) *Client {
 		rpcEndpoint: rpcEndpoint,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 		avoidList:   avoidList,
+		walletCache: make(map[string][]string),
 	}
 }
 
 // GetProgramAccounts fetches all accounts owned by a program
 func (c *Client) GetProgramAccounts(programID string, filters []map[string]interface{}, progressCallback domain.ProgressCallback) ([]map[string]interface{}, error) {
-	if progressCallback != nil {
-		progressCallback(fmt.Sprintf("Fetching accounts for program %s...", programID))
-	}
 
 	// Prepare the RPC request
 	req := RpcRequest{
@@ -59,10 +60,6 @@ func (c *Client) GetProgramAccounts(programID string, filters []map[string]inter
 		return nil, fmt.Errorf("failed to unmarshal program accounts: %w", err)
 	}
 
-	if progressCallback != nil {
-		progressCallback(fmt.Sprintf("Found %d accounts for program %s", len(accounts), programID))
-	}
-
 	return accounts, nil
 }
 
@@ -78,8 +75,16 @@ func (c *Client) GetWalletsForToken(mintAddress string, progressCallback domain.
 		}
 	}
 
-	if progressCallback != nil {
-		progressCallback(fmt.Sprintf("Searching for wallets that interacted with token %s...", mintAddress))
+	// Check cache first
+	c.cacheMutex.RLock()
+	cachedWallets, found := c.walletCache[mintAddress]
+	c.cacheMutex.RUnlock()
+
+	if found {
+		if progressCallback != nil {
+			progressCallback(fmt.Sprintf("Using cached data for token %s (%d wallets)", mintAddress, len(cachedWallets)))
+		}
+		return cachedWallets, nil
 	}
 
 	// Create a filter to only get accounts for this mint
@@ -105,10 +110,7 @@ func (c *Client) GetWalletsForToken(mintAddress string, progressCallback domain.
 						if owner, ok := info["owner"].(string); ok {
 							// Check if the wallet should be avoided
 							if c.avoidList != nil {
-								if shouldAvoid, reason := c.avoidList.ShouldAvoid(owner); shouldAvoid {
-									if progressCallback != nil {
-										progressCallback(fmt.Sprintf("Skipping wallet %s: %s", owner, reason))
-									}
+								if shouldAvoid, _ := c.avoidList.ShouldAvoid(owner); shouldAvoid {
 									continue
 								}
 							}
@@ -125,6 +127,11 @@ func (c *Client) GetWalletsForToken(mintAddress string, progressCallback domain.
 	for wallet := range wallets {
 		result = append(result, wallet)
 	}
+
+	// Cache the results
+	c.cacheMutex.Lock()
+	c.walletCache[mintAddress] = result
+	c.cacheMutex.Unlock()
 
 	if progressCallback != nil {
 		progressCallback(fmt.Sprintf("Found %d wallets that interacted with token %s", len(result), mintAddress))

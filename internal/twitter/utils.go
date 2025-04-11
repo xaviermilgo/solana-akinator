@@ -7,13 +7,9 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
-
 	"wallet-guesser/internal/domain"
 )
 
-// solanaAddressRegex is a regular expression for finding Solana addresses
-// Solana addresses are base58 encoded and are typically 32-44 characters long
 var solanaAddressRegex = regexp.MustCompile(`\b[1-9A-HJ-NP-Za-km-z]{32,44}\b`)
 
 // processTwitterAccount converts Apify response to our domain model and extracts addresses
@@ -57,6 +53,7 @@ func (c *Client) processTwitterAccount(accountResp ApifyFollowerResponse, progre
 
 	// If a website is provided, fetch and scan it
 	for _, profileUrl := range user.Urls {
+		continue
 		if !isValidURL(profileUrl) {
 			continue
 		}
@@ -64,7 +61,7 @@ func (c *Client) processTwitterAccount(accountResp ApifyFollowerResponse, progre
 			progressCallback(fmt.Sprintf("Checking @%s's website: %s", accountResp.Username, profileUrl))
 		}
 
-		websiteAddresses, err := FetchAndExtractAddressesFromWebsite(profileUrl)
+		websiteAddresses, err := c.FetchAndExtractAddressesFromWebsite(profileUrl)
 		if err != nil {
 			// Just log the error but continue
 			if progressCallback != nil {
@@ -106,34 +103,49 @@ func ExtractSolanaAddresses(text string) []string {
 }
 
 // FetchAndExtractAddressesFromWebsite fetches the content of a website and extracts potential Solana addresses
-func FetchAndExtractAddressesFromWebsite(websiteURL string) ([]string, error) {
-	// Add http:// prefix if missing
+func (c *Client) FetchAndExtractAddressesFromWebsite(websiteURL string) ([]string, error) {
+	// Normalize URL
 	if !strings.HasPrefix(websiteURL, "http://") && !strings.HasPrefix(websiteURL, "https://") {
 		websiteURL = "https://" + websiteURL
 	}
 
-	// Make a request to the website
-	client := &http.Client{
-		Timeout: 10 * time.Second, // Set shorter timeout for website fetching
-	}
-	resp, err := client.Get(websiteURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	// Check cache first
+	c.cacheMutex.RLock()
+	cachedContent, found := c.websiteCache[websiteURL]
+	c.cacheMutex.RUnlock()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error status: %d", resp.StatusCode)
+	var bodyText string
+	if found {
+		// Use cached content
+		bodyText = cachedContent
+	} else {
+		// Fetch from website
+		resp, err := c.httpClient.Get(websiteURL)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("HTTP error status: %d", resp.StatusCode)
+		}
+
+		// Read the body
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert to string
+		bodyText = string(bodyBytes)
+
+		// Cache the result
+		c.cacheMutex.Lock()
+		c.websiteCache[websiteURL] = bodyText
+		c.cacheMutex.Unlock()
 	}
 
-	// Read the body
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert to string and extract addresses
-	bodyText := string(bodyBytes)
+	// Extract addresses
 	return ExtractSolanaAddresses(bodyText), nil
 }
 

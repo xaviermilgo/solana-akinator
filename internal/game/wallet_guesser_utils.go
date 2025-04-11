@@ -2,12 +2,11 @@ package game
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sort"
 	"strings"
 
 	"wallet-guesser/internal/domain"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // TokenWithSource pairs a token address with its source (Twitter handle)
@@ -64,13 +63,19 @@ func (wg *WalletGuesser) extractPotentialTokens(following []domain.TwitterUser, 
 }
 
 // findWalletsForTokens gets wallets that have interacted with the given tokens
+// Optimized to track wallet-to-token relationships and reduce avoid-list checks
 func (wg *WalletGuesser) findWalletsForTokens(tokenSources []TokenWithSource, progressCallback domain.ProgressCallback) []WalletScore {
 	walletScores := make(map[string]int)
 	walletToTokens := make(map[string][]TokenWithSource)
+	processedWallets := make(map[string]bool) // Track wallets we've already checked against the avoid list
+
+	// Count of valid tokens actually processed
+	validTokensProcessed := 0
 
 	for _, tokenSource := range tokenSources {
 		if progressCallback != nil {
-			progressCallback(fmt.Sprintf("Checking blockchain for wallets that interacted with token %s...", tokenSource.MintAddress))
+			sixBeforeEnd := len(tokenSource.MintAddress) - 6
+			progressCallback(fmt.Sprintf("Looking for wallets that interacted with token %s...%s", tokenSource.MintAddress[:6], tokenSource.MintAddress[sixBeforeEnd:]))
 		}
 
 		// Get all wallets that have interacted with this token
@@ -80,28 +85,51 @@ func (wg *WalletGuesser) findWalletsForTokens(tokenSources []TokenWithSource, pr
 			continue
 		}
 
+		// Skip if we didn't find any wallets (might happen with avoid list filtering)
+		if len(wallets) == 0 {
+			continue
+		}
+
+		// If we got here, we have a valid token with results
+		validTokensProcessed++
+
+		// Process wallets for this token
 		for _, wallet := range wallets {
-			// Check if the wallet should be avoided
-			if wg.avoidListService != nil {
-				if shouldAvoid, reason := wg.avoidListService.ShouldAvoid(wallet); shouldAvoid {
-					if progressCallback != nil {
-						progressCallback(fmt.Sprintf("Skipping wallet %s: %s", wallet, reason))
+			// Only check against avoid list if we haven't seen this wallet before
+			if !processedWallets[wallet] {
+				processedWallets[wallet] = true
+
+				// Check if the wallet should be avoided
+				if wg.avoidListService != nil {
+					if shouldAvoid, _ := wg.avoidListService.ShouldAvoid(wallet); shouldAvoid {
+						continue
 					}
-					continue
 				}
 			}
 
+			// Increment score and associate this token with the wallet
 			walletScores[wallet]++
-
-			// Track which tokens this wallet has interacted with
 			walletToTokens[wallet] = append(walletToTokens[wallet], tokenSource)
+		}
+	}
+
+	if progressCallback != nil {
+		processedCount := len(tokenSources)
+		if validTokensProcessed < processedCount {
+			progressCallback(fmt.Sprintf("Processed %d tokens, but only %d had valid results",
+				processedCount, validTokensProcessed))
 		}
 	}
 
 	// Convert to sorted slice
 	var rankedWallets []WalletScore
 	for addr, score := range walletScores {
-		rankedWallets = append(rankedWallets, WalletScore{addr, score})
+		// Normalize scores based on valid tokens processed
+		normalizedScore := 0
+		if validTokensProcessed > 0 {
+			normalizedScore = (score * 100) / validTokensProcessed
+		}
+		rankedWallets = append(rankedWallets, WalletScore{addr, normalizedScore})
 	}
 
 	// Sort wallets by score (highest first)
@@ -166,15 +194,16 @@ func (wg *WalletGuesser) processRankedWallets(twitterHandle string, rankedWallet
 			sourcesList = append(sourcesList, src)
 		}
 
+		// The score is already normalized in the findWalletsForTokens function
 		sourceText := fmt.Sprintf("Match score: %d/100. Matched tokens from: %s",
-			calculateConfidence(wallet.Score, len(tokenSources)),
+			wallet.Score,
 			strings.Join(sourcesList, ", "))
 
 		result.Sources = append(result.Sources, sourceText)
 	}
 
-	// Set overall confidence based on highest match
-	result.Confidence = calculateConfidence(rankedWallets[0].Score, len(tokenSources))
+	// Use the highest score directly since we normalized it in findWalletsForTokens
+	result.Confidence = rankedWallets[0].Score
 
 	return result
 }
@@ -200,22 +229,26 @@ func (wg *WalletGuesser) getWalletToTokensMap(rankedWallets []WalletScore, token
 }
 
 // calculateConfidence returns a confidence score (0-100) based on matches
-func calculateConfidence(matches int, totalTokens int) int {
-	if totalTokens == 0 {
+func calculateConfidence(matches int, totalValidMints int) int {
+	if totalValidMints == 0 {
 		return 0
 	}
 
-	// Base confidence on percentage of tokens matched, with a curve
-	rawPercent := (float64(matches) / float64(totalTokens)) * 100
+	// Calculate ratio of matches to total valid mints
+	ratio := float64(matches) / float64(totalValidMints)
+
+	// Scale to 0-100
+	confidence := int(ratio * 100)
 
 	// Apply a curve to make it harder to get very high confidence
-	if rawPercent >= 75 {
-		return 90 + int((rawPercent-75)/25)*10 // 75% -> 90%, 100% -> 100%
-	} else if rawPercent >= 50 {
-		return 70 + int((rawPercent-50)/25)*20 // 50% -> 70%, 75% -> 90%
-	} else if rawPercent >= 25 {
-		return 40 + int((rawPercent-25)/25)*30 // 25% -> 40%, 50% -> 70%
+	// and to ensure low match counts still produce meaningful results
+	if confidence >= 75 {
+		return 90 + ((confidence-75)*10)/25 // 75% -> 90%, 100% -> 100%
+	} else if confidence >= 50 {
+		return 70 + ((confidence-50)*20)/25 // 50% -> 70%, 75% -> 90%
+	} else if confidence >= 25 {
+		return 40 + ((confidence-25)*30)/25 // 25% -> 40%, 50% -> 70%
 	} else {
-		return int(rawPercent) + 15 // 0% -> 15%, 25% -> 40%
+		return confidence + 15 // Apply minimum boost to low confidence
 	}
 }

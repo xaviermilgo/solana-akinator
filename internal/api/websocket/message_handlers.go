@@ -36,15 +36,8 @@ func (h *Handler) processWalletGuess(conn *websocket.Conn, twitterHandle string)
 		return
 	}
 
-	var lastMessageTime time.Time
 	// Define a progress callback to update the user
 	progressCallback := func(message string) {
-		// Drop messages if more than twice per second
-		if !lastMessageTime.IsZero() || time.Since(lastMessageTime) < time.Millisecond*500 {
-			lastMessageTime = time.Now()
-			log.Warnf("[%s] dropped update: %s", twitterHandle, message)
-			return
-		}
 		log.Infof("[%s] update: %s", twitterHandle, message)
 		// Send progress update to the client
 		if err := SendProgressUpdate(conn, message); err != nil {
